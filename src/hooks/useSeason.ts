@@ -47,12 +47,14 @@ export function useSeason() {
           { data: rawLocations },
           { data: rawStaff },
           { data: rawVenueRules },
+          { data: rawAgeGroups },
         ] = await Promise.all([
           supabase.from("period_slots").select("*").eq("season_id", season.id).order("sort_order"),
           supabase.from("sports").select("*").eq("season_id", season.id),
           supabase.from("locations").select("*").eq("season_id", season.id),
           supabase.from("staff").select("*").eq("season_id", season.id),
           supabase.from("venue_rules").select("*"),
+          supabase.from("age_groups").select("*").eq("season_id", season.id).order("sort_order"),
         ]);
 
         const periods    = (rawPeriods    ?? []) as PeriodSlot[];
@@ -60,6 +62,19 @@ export function useSeason() {
         const locations  = (rawLocations  ?? []) as Location[];
         const staffBase  = (rawStaff      ?? []) as StaffMember[];
         const venueRuleRows = (rawVenueRules ?? []) as VenueRule[];
+
+        // Age groups: use dedicated table; auto-populate from periods on first load
+        let ageGroups: string[];
+        if (rawAgeGroups && rawAgeGroups.length > 0) {
+          ageGroups = rawAgeGroups.map((ag: any) => ag.name);
+        } else {
+          ageGroups = [...new Set(periods.flatMap(p => p.age_groups))];
+          if (ageGroups.length > 0) {
+            await supabase.from("age_groups").insert(
+              ageGroups.map((name, i) => ({ season_id: season.id, name, sort_order: i }))
+            );
+          }
+        }
 
         // Fetch restrictions separately (needs staff IDs)
         let staffWithRestrictions: StaffWithRestrictions[] = staffBase.map(m => ({
@@ -109,7 +124,7 @@ export function useSeason() {
           friPeriods:    periods.filter(p => p.day_type === "fri"),
           sports,
           locations,
-          ageGroups: [...new Set(periods.flatMap(p => p.age_groups))],
+          ageGroups,
           venueRules,
           ageGroupSports: (season as any).age_group_sports ?? {},
           staff: staffWithRestrictions,

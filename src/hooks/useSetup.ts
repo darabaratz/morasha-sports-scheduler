@@ -76,16 +76,27 @@ export function useSetup() {
 
   // ── Age groups ──────────────────────────────────────────────────────────────
 
-  const addAgeGroup = useCallback((name: string) => {
-    if (ageGroups.includes(name)) return;
+  const addAgeGroup = useCallback(async (name: string) => {
+    if (!season || ageGroups.includes(name)) return;
+    const { error } = await supabase
+      .from("age_groups")
+      .insert({ season_id: season.id, name, sort_order: ageGroups.length });
+    if (error) { toast.error("Could not add age group"); return; }
     setSeasonData({ ageGroups: [...ageGroups, name] });
-    // Age groups are stored as text[] on period_slots, not as a separate table
-    // Just update local state — periods will reference the group when edited
-  }, [ageGroups, setSeasonData]);
+    toast.success(`"${name}" added`);
+  }, [season, ageGroups, setSeasonData]);
 
-  const removeAgeGroup = useCallback((name: string) => {
+  const removeAgeGroup = useCallback(async (name: string) => {
+    if (!season) return;
+    const { error } = await supabase
+      .from("age_groups")
+      .delete()
+      .eq("season_id", season.id)
+      .eq("name", name);
+    if (error) { toast.error("Could not remove age group"); return; }
     setSeasonData({ ageGroups: ageGroups.filter(g => g !== name) });
-  }, [ageGroups, setSeasonData]);
+    toast.success(`"${name}" removed`);
+  }, [season, ageGroups, setSeasonData]);
 
   // ── Sports ──────────────────────────────────────────────────────────────────
 
