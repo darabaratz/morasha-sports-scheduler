@@ -40,7 +40,12 @@ export default function ExportView() {
           <button onClick={() => navigate(1)} className="p-2 rounded-xl hover:bg-muted"><ChevronRight size={18} /></button>
         </div>
         <div className="flex gap-2">
-          <button onClick={() => window.print()}
+          <button onClick={() => {
+              const prev = document.title;
+              document.title = `Girls Campus Sports Schedule - ${fmtLong(selectedDate)}`;
+              window.print();
+              document.title = prev;
+            }}
             className="flex items-center gap-1.5 text-sm bg-white border border-border px-3 py-2 rounded-xl hover:bg-muted transition-colors font-medium">
             <Printer size={14} />Print
           </button>
