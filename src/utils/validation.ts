@@ -24,6 +24,7 @@ export interface SoftWarning {
 
 export function checkHardBlocks(params: {
   staffId: string;
+  sport: string;
   location: string;
   date: string;
   periodSlotId: string;
@@ -31,7 +32,7 @@ export function checkHardBlocks(params: {
   periodSessions: SportSession[];
   staff: StaffWithRestrictions[];
 }): HardBlock | null {
-  const { staffId, location, date, editingId, periodSessions, staff } = params;
+  const { staffId, sport, location, date, editingId, periodSessions, staff } = params;
   const member = staff.find(m => m.id === staffId);
 
   if (member?.restrictions.unavailableDates.includes(date)) {
@@ -44,8 +45,9 @@ export function checkHardBlocks(params: {
     return { reason: `${member?.name ?? "This staff member"} is already assigned in this period.` };
   }
 
-  if (location && others.some(s => s.location === location)) {
-    return { reason: `${location} is already booked for this period.` };
+  // Only block the location if a *different* sport is using it — same sport allows co-staff
+  if (location && others.some(s => s.location === location && s.sport !== sport)) {
+    return { reason: `${location} is already booked for a different sport this period.` };
   }
 
   return null;
