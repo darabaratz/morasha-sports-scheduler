@@ -11,6 +11,7 @@ import {
 import type { SportSession, PeriodSlot, StaffWithRestrictions } from "../../types";
 import { Avatar, CHIP_PALETTE, sportChipClass } from "../components/shared";
 import AddSessionModal from "../components/AddSessionModal";
+import AddCoStaffModal from "../components/AddCoStaffModal";
 import CopyScheduleModal from "../components/CopyScheduleModal";
 import AutoGenerateModal from "../components/AutoGenerateModal";
 
@@ -25,6 +26,7 @@ export default function ScheduleView() {
   const { addSession, deleteSession } = useSessions();
 
   const [addModal,      setAddModal]      = useState<{ periodId: string; edit: SportSession | null } | null>(null);
+  const [coStaffModal,  setCoStaffModal]  = useState<{ sport: string; location: string; age_group: string; periodId: string; date: string; existingIds: string[] } | null>(null);
   const [deleteTarget,  setDeleteTarget]  = useState<SportSession | null>(null);
   const [copyModal,     setCopyModal]     = useState(false);
   const [autoGenModal,  setAutoGenModal]  = useState(false);
@@ -156,6 +158,9 @@ export default function ScheduleView() {
                 onAdd={() => setAddModal({ periodId: p.id, edit: null })}
                 onEdit={s => setAddModal({ periodId: s.period_slot_id, edit: s })}
                 onDelete={s => setDeleteTarget(s)}
+                onAddCoStaff={(sport, location, age_group, existingIds) =>
+                  setCoStaffModal({ sport, location, age_group, periodId: p.id, date: selectedDate, existingIds })
+                }
               />
             );
           })}
@@ -175,6 +180,15 @@ export default function ScheduleView() {
           venueRules={venueRules}
           sessions={sessions}
           onClose={() => setAddModal(null)}
+        />
+      )}
+
+      {coStaffModal && (
+        <AddCoStaffModal
+          group={coStaffModal}
+          periodSessions={sessions.filter(s => s.period_slot_id === coStaffModal.periodId && s.date === selectedDate)}
+          staff={staff}
+          onClose={() => setCoStaffModal(null)}
         />
       )}
 
@@ -216,7 +230,27 @@ export default function ScheduleView() {
   );
 }
 
-function PeriodRow({ period, sessions, staff, sportNames, readOnly, target, onAdd, onEdit, onDelete }: {
+interface SessionGroup {
+  key: string;
+  sport: string;
+  location: string;
+  age_group: string;
+  sessions: SportSession[];
+}
+
+function groupSessions(sessions: SportSession[]): SessionGroup[] {
+  const map = new Map<string, SessionGroup>();
+  for (const s of sessions) {
+    const key = `${s.sport}||${s.location}||${s.age_group}`;
+    if (!map.has(key)) {
+      map.set(key, { key, sport: s.sport, location: s.location, age_group: s.age_group, sessions: [] });
+    }
+    map.get(key)!.sessions.push(s);
+  }
+  return Array.from(map.values());
+}
+
+function PeriodRow({ period, sessions, staff, sportNames, readOnly, target, onAdd, onEdit, onDelete, onAddCoStaff }: {
   period: PeriodSlot;
   sessions: SportSession[];
   staff: StaffWithRestrictions[];
@@ -226,10 +260,12 @@ function PeriodRow({ period, sessions, staff, sportNames, readOnly, target, onAd
   onAdd: () => void;
   onEdit: (s: SportSession) => void;
   onDelete: (s: SportSession) => void;
+  onAddCoStaff: (sport: string, location: string, age_group: string, existingIds: string[]) => void;
 }) {
   const filled = sessions.length;
   const isComplete = filled >= target && target > 0;
   const isPartial  = filled > 0 && !isComplete;
+  const groups = groupSessions(sessions);
 
   return (
     <div className={`bg-white rounded-2xl border ${sessions.length === 0 && !readOnly ? "border-dashed border-border/70" : "border-border"}`}>
@@ -242,7 +278,6 @@ function PeriodRow({ period, sessions, staff, sportNames, readOnly, target, onAd
             <span key={ag} className="text-xs bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded font-medium">{ag}</span>
           ))}
         </div>
-        {/* Fill status badge */}
         {!readOnly && target > 0 && (
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
             isComplete ? "bg-emerald-100 text-emerald-700" :
@@ -258,29 +293,45 @@ function PeriodRow({ period, sessions, staff, sportNames, readOnly, target, onAd
           </button>
         )}
       </div>
-      {sessions.length > 0 && (
+      {groups.length > 0 && (
         <div className="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {sessions.map(s => {
-            const m = staff.find(x => x.id === s.staff_id);
-            return (
-              <div key={s.id} className="flex items-center gap-2.5 p-2.5 rounded-xl border border-border bg-white group hover:border-border/80 transition-colors">
-                <Avatar initials={m?.initials || "?"} color={m?.color || "#999"} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold truncate leading-tight">{m?.name}</div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${sportChipClass(s.sport, sportNames)}`}>{s.sport}</span>
-                    <span className="text-xs text-muted-foreground truncate">· {s.location}</span>
-                  </div>
-                </div>
-                {!readOnly && (
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button onClick={() => onEdit(s)} className="p-1 rounded hover:bg-muted transition-colors" title="Edit"><Edit2 size={11} /></button>
-                    <button onClick={() => onDelete(s)} className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors" title="Delete"><Trash2 size={11} /></button>
-                  </div>
+          {groups.map(g => (
+            <div key={g.key} className="p-2.5 rounded-xl border border-border bg-white group hover:border-border/80 transition-colors">
+              {/* Sport + location header */}
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${sportChipClass(g.sport, sportNames)}`}>{g.sport}</span>
+                <span className="text-xs text-muted-foreground truncate">· {g.location}</span>
+                {period.age_groups.length > 1 && (
+                  <span className="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded font-medium ml-auto flex-shrink-0">{g.age_group}</span>
                 )}
               </div>
-            );
-          })}
+              {/* Staff rows */}
+              {g.sessions.map(s => {
+                const m = staff.find(x => x.id === s.staff_id);
+                return (
+                  <div key={s.id} className="flex items-center gap-2 py-1">
+                    <Avatar initials={m?.initials || "?"} color={m?.color || "#999"} size="sm" />
+                    <span className="text-xs font-semibold flex-1 truncate">{m?.name}</span>
+                    {!readOnly && (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button onClick={() => onEdit(s)} className="p-1 rounded hover:bg-muted transition-colors" title="Edit"><Edit2 size={11} /></button>
+                        <button onClick={() => onDelete(s)} className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors" title="Remove"><Trash2 size={11} /></button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {/* Add co-staff button */}
+              {!readOnly && (
+                <button
+                  onClick={() => onAddCoStaff(g.sport, g.location, g.age_group, g.sessions.map(s => s.id))}
+                  className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-primary hover:text-primary/80 transition-colors"
+                >
+                  <Plus size={10} />Add staff
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
       {sessions.length === 0 && !readOnly && (

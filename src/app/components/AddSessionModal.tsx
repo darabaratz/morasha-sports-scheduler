@@ -130,7 +130,7 @@ export default function AddSessionModal({
               <select value={location} onChange={e => setLocation(e.target.value)} className="select-field">
                 <option value="">Select location…</option>
                 {validLocations.map(l => {
-                  const taken = periodSessions.some(s => s.location === l && s.sport !== sport && s.id !== edit?.id);
+                  const taken = periodSessions.some(s => s.location === l && s.id !== edit?.id);
                   return (
                     <option key={l} value={l} disabled={taken}>
                       {l}{taken ? " — In use this period" : ""}
